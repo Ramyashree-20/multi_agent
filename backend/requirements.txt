@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+langchain
+langchain-text-splitters
+langgraph
+langchain-community
+langchain-groq
+chromadb
+sentence-transformers
+PyMuPDF
+python-docx
+pydantic
+python-dotenv
+fpdf2
