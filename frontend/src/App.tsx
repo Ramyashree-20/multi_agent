@@ -21,7 +21,13 @@ import {
   FolderOpen,
   PieChart,
   TrendingUp,
-  Download
+  Download,
+  Plus,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  Paperclip
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -34,10 +40,11 @@ interface ChatMessage {
   agent_used?: string; sources?: Source[]; confidence?: number; entities?: any[]; timestamp: Date;
 }
 interface UploadedFile { name: string; size: string; status: 'processing' | 'ready' | 'error'; type?: string; }
+interface ChatSession { id: string; title: string; messages: ChatMessage[]; files: UploadedFile[]; timestamp: Date; }
 
 function App() {
   const [showDashboard, setShowDashboard] = useState(false);
-  const [dashboardStep, setDashboardStep] = useState<'UPLOAD' | 'QUERY' | 'ANALYTICS'>('UPLOAD');
+  const [dashboardStep, setDashboardStep] = useState<'QUERY' | 'ANALYTICS'>('QUERY');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [query, setQuery] = useState('');
   const [isQuerying, setIsQuerying] = useState(false);
@@ -46,6 +53,13 @@ function App() {
   const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState<number | string>(1);
   const [repoMode, setRepoMode] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -89,6 +103,76 @@ function App() {
     } finally { setIsQuerying(false); }
   };
 
+  const createNewSession = () => {
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title: 'New Conversation',
+      messages: [],
+      files: [],
+      timestamp: new Date()
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSessionId(newSession.id);
+    setMessages([]);
+    setFiles([]);
+    setDashboardStep('QUERY');
+  };
+
+  const switchSession = (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      setActiveSessionId(sessionId);
+      setMessages(session.messages);
+      setFiles(session.files || []);
+      setDashboardStep('QUERY');
+    }
+  };
+
+  // Sync messages to active session
+  React.useEffect(() => {
+    if (activeSessionId) {
+      setSessions(prev => prev.map(s => 
+        // Only auto-update title if it's currently a default generic title
+        s.id === activeSessionId ? { ...s, messages, files, title: s.title === 'New Conversation' && messages.length > 0 ? messages[0].content.substring(0, 30) + (messages[0].content.length > 30 ? '...' : '') : s.title } : s
+      ));
+    } else if (messages.length > 0 && !activeSessionId) {
+        // Create session if it doesn't exist but we have messages
+        const newId = Date.now().toString();
+        const generatedTitle = messages[0].content.substring(0, 30) + (messages[0].content.length > 30 ? '...' : '');
+        setSessions([{ id: newId, title: generatedTitle, messages, files, timestamp: new Date() }]);
+        setActiveSessionId(newId);
+    }
+  }, [messages, files]);
+
+  const deleteSession = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (activeSessionId === id) {
+      setActiveSessionId(null);
+      setMessages([]);
+      setFiles([]);
+    }
+  };
+
+  const startRename = (e: React.MouseEvent, id: string, currentTitle: string) => {
+    e.stopPropagation();
+    setEditingSessionId(id);
+    setEditingTitle(currentTitle);
+  };
+
+  const saveRename = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (editingTitle.trim()) {
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, title: editingTitle.trim() } : s));
+    }
+    setEditingSessionId(null);
+  };
+
+  const cancelRename = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingSessionId(null);
+  };
+
   const downloadBriefing = async () => {
     if (!activeMessage) return;
     try {
@@ -127,6 +211,20 @@ function App() {
     }
   };
 
+  const handleLogin = () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(loginEmail)) {
+      setLoginError('Please enter a valid corporate email address.');
+      return;
+    }
+    if (loginPassword.length < 6) {
+      setLoginError('Password must be at least 6 characters.');
+      return;
+    }
+    setLoginError('');
+    setShowDashboard(true);
+  };
+
   if (showDashboard) {
     return (
       <div className="dashboard">
@@ -138,28 +236,92 @@ function App() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
              <button 
-               className={`nav-link ${dashboardStep === 'UPLOAD' ? 'active' : ''}`} 
-               onClick={() => setDashboardStep('UPLOAD')}
-               style={{ padding: '0.75rem 1rem', borderRadius: '10px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px', background: dashboardStep === 'UPLOAD' ? '#eff6ff' : 'transparent', color: dashboardStep === 'UPLOAD' ? '#2563eb' : '#64748b' }}
-             >
-               <UploadCloud size={18} /> 1. Upload
-             </button>
-             <button 
                className={`nav-link ${dashboardStep === 'QUERY' ? 'active' : ''}`} 
                onClick={() => setDashboardStep('QUERY')}
                style={{ padding: '0.75rem 1rem', borderRadius: '10px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px', background: dashboardStep === 'QUERY' ? '#eff6ff' : 'transparent', color: dashboardStep === 'QUERY' ? '#2563eb' : '#64748b' }}
              >
-               <MessageSquare size={18} /> 2. Query
+               <MessageSquare size={18} /> Query
              </button>
              <button 
                className={`nav-link ${dashboardStep === 'ANALYTICS' ? 'active' : ''}`} 
                onClick={() => setDashboardStep('ANALYTICS')} 
                style={{ padding: '0.75rem 1rem', borderRadius: '10px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px', background: dashboardStep === 'ANALYTICS' ? '#eff6ff' : 'transparent', color: dashboardStep === 'ANALYTICS' ? '#2563eb' : '#64748b' }}
              >
-               <BarChart3 size={18} /> 3. Analytics
+               <BarChart3 size={18} /> Analytics
              </button>
           </div>
-          <button className="nav-link" onClick={() => setShowDashboard(false)} style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444' }}>
+
+          <div style={{ marginTop: '2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <h4 style={{ fontSize: '10px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem', paddingLeft: '1rem' }}>Chat History</h4>
+            <button 
+              onClick={createNewSession}
+              style={{ margin: '0 10px 10px', padding: '10px', borderRadius: '12px', border: '1px dashed #cbd5e1', background: 'white', color: '#2563eb', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            >
+              <Plus size={14} /> New Chat
+            </button>
+            {sessions.map(s => (
+              <div
+                key={s.id}
+                onClick={() => switchSession(s.id)}
+                style={{ 
+                  padding: '10px 1rem', 
+                  borderRadius: '10px', 
+                  fontSize: '12px',
+                  background: activeSessionId === s.id ? '#f1f5f9' : 'transparent',
+                  color: activeSessionId === s.id ? '#1e293b' : '#64748b',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => {
+                  const actions = e.currentTarget.querySelector('.session-actions') as HTMLElement;
+                  if (actions) actions.style.opacity = '1';
+                }}
+                onMouseLeave={(e) => {
+                  const actions = e.currentTarget.querySelector('.session-actions') as HTMLElement;
+                  if (actions) actions.style.opacity = '0';
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', flex: 1 }}>
+                  <MessageSquare size={14} opacity={0.5} style={{ flexShrink: 0 }} />
+                  {editingSessionId === s.id ? (
+                    <input
+                      value={editingTitle}
+                      onChange={e => setEditingTitle(e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveRename(e as any, s.id);
+                        if (e.key === 'Escape') cancelRename(e as any);
+                      }}
+                      autoFocus
+                      style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', width: '100%', outline: 'none' }}
+                    />
+                  ) : (
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.title}
+                    </span>
+                  )}
+                </div>
+
+                {editingSessionId === s.id ? (
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <button onClick={(e) => saveRename(e, s.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#10b981', padding: '2px' }}><Check size={14} /></button>
+                    <button onClick={cancelRename} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444', padding: '2px' }}><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="session-actions" style={{ display: 'flex', gap: '4px', opacity: 0, transition: 'opacity 0.2s', flexShrink: 0 }}>
+                    <button onClick={(e) => startRename(e, s.id, s.title)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b', padding: '2px' }}><Edit2 size={14} /></button>
+                    <button onClick={(e) => deleteSession(e, s.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444', padding: '2px' }}><Trash2 size={14} /></button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button className="nav-link" onClick={() => setShowDashboard(false)} style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }}>
             <ChevronLeft size={18} /> Exit Portal
           </button>
         </aside>
@@ -184,60 +346,8 @@ function App() {
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '3rem' }}>
             <div className="container" style={{ maxWidth: dashboardStep === 'QUERY' && previewFile ? '1400px' : '900px', transition: 'max-width 0.4s ease' }}>
-              
-              {/* ── STEP 1: UPLOAD ── */}
-              {dashboardStep === 'UPLOAD' && (
-                <div style={{ textAlign: 'center', paddingTop: '4rem' }}>
-                  <div className="section-header">
-                    <p className="badge">Phase 01</p>
-                    <h2 style={{ fontSize: '2.5rem' }}>Upload Your Document</h2>
-                    <p style={{ maxWidth: '500px', margin: '1rem auto', color: '#64748b' }}>Start by uploading your PDF for multi-agent synthesis and indexing.</p>
-                  </div>
-                  
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{ border: '2px dashed #cbd5e1', borderRadius: '32px', padding: '5rem', cursor: 'pointer', transition: 'all 0.3s', background: 'white' }}
-                    onMouseOver={e => e.currentTarget.style.borderColor = '#2563eb'}
-                    onMouseOut={e => e.currentTarget.style.borderColor = '#cbd5e1'}
-                  >
-                    <UploadCloud size={64} style={{ color: '#2563eb', marginBottom: '1.5rem' }} />
-                    <h3 style={{ fontSize: '1.5rem' }}>Click to select PDF files</h3>
-                    <p style={{ color: '#64748b', fontSize: '14px' }}>Files will be indexed into ChromaDB vector base.</p>
-                    <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept=".pdf" multiple />
-                  </div>
-
-                  {files.length > 0 && (
-                    <div style={{ marginTop: '3rem', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'center' }}>
-                      {files.map((file, idx) => (
-                        <div key={idx} className="card" style={{ width: '280px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '16px' }}>
-                          <div style={{ background: '#eff6ff', padding: '8px', borderRadius: '8px' }}>
-                             <FileText color="#2563eb" size={20} />
-                          </div>
-                          <div style={{ textAlign: 'left', overflow: 'hidden' }}>
-                             <p style={{ fontWeight: 'bold', margin: 0, fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</p>
-                             <p style={{ 
-                               fontSize: '9px', 
-                               color: file.status === 'ready' ? '#10b981' : (file.status === 'error' ? '#ef4444' : '#2563eb'), 
-                               fontWeight: '900', 
-                               opacity: file.status === 'processing' ? 0.7 : 1 
-                             }}>
-                               {file.status === 'processing' ? '⚡ ANALYZING DOCUMENT DNA...' : (file.status === 'error' ? '❌ UPLOAD FAILED' : '✅ READY FOR SYNTHESIS')}
-                             </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {files.some(f => f.status === 'ready') && (
-                    <button className="btn btn-primary" onClick={() => setDashboardStep('QUERY')} style={{ marginTop: '3rem', padding: '1rem 4rem' }}>
-                      Proceed to Synthesis <ChevronRight size={18} />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* ── STEP 2: QUERY ── */}
+              <div className="dashboard-content">
+              {/* ── STEP 1: QUERY ── */}
               {dashboardStep === 'QUERY' && (
                 <div style={{ display: 'flex', gap: '2rem', minHeight: '100%', position: 'relative' }}>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '120px' }}>
@@ -331,17 +441,34 @@ function App() {
                     <div ref={chatEndRef} />
 
                     <div style={{ position: 'sticky', bottom: '0', padding: '2rem 0', background: 'transparent', zIndex: 10 }}>
-                       <form onSubmit={handleQuery} style={{ display: 'flex', gap: '1rem', background: 'white', padding: '12px', borderRadius: '30px', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}>
-                          <input 
-                            className="form-control" 
-                            style={{ border: 'none', background: 'transparent', fontSize: '18px', paddingLeft: '1rem' }} 
-                            placeholder="Interrogate your document..." 
-                            value={query} 
-                            onChange={e => setQuery(e.target.value)} 
-                          />
-                          <button className="btn btn-primary" type="submit" disabled={isQuerying} style={{ width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                            {isQuerying ? <TrendingUp className="animate-pulse" /> : <Send size={24} />}
-                          </button>
+                       <form onSubmit={handleQuery} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'white', padding: '12px', borderRadius: '30px', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}>
+                          {files.length > 0 && (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '0 10px' }}>
+                              {files.map((f, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f1f5f9', padding: '6px 12px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold', color: f.status === 'ready' ? '#10b981' : (f.status === 'error' ? '#ef4444' : '#64748b') }}>
+                                  <FileText size={12} />
+                                  <span>{f.name.substring(0, 20)}{f.name.length > 20 ? '...' : ''}</span>
+                                  {f.status === 'processing' && <span className="animate-pulse">...</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                            <button type="button" onClick={() => fileInputRef.current?.click()} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', flexShrink: 0 }}>
+                              <Paperclip size={20} />
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept=".pdf" multiple style={{ display: 'none' }} />
+                            <input 
+                              className="form-control" 
+                              style={{ border: 'none', background: 'transparent', fontSize: '18px', paddingLeft: '0.5rem', width: '100%' }} 
+                              placeholder="Interrogate your documents..." 
+                              value={query} 
+                              onChange={e => setQuery(e.target.value)} 
+                            />
+                            <button className="btn btn-primary" type="submit" disabled={isQuerying} style={{ width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>
+                              {isQuerying ? <TrendingUp className="animate-pulse" /> : <Send size={24} />}
+                            </button>
+                          </div>
                        </form>
                     </div>
                   </div>
@@ -536,8 +663,8 @@ function App() {
                       <button className="btn btn-outline" onClick={() => setDashboardStep('QUERY')} style={{ padding: '1.25rem 3rem', borderRadius: '15px', fontWeight: '800' }}>
                          Continue Chatting
                       </button>
-                      <button className="btn btn-primary" onClick={() => { setMessages([]); setDashboardStep('UPLOAD'); }} style={{ padding: '1.25rem 3rem', borderRadius: '15px', fontWeight: '800' }}>
-                         Analyze New Document
+                      <button className="btn btn-primary" onClick={() => createNewSession()} style={{ padding: '1.25rem 3rem', borderRadius: '15px', fontWeight: '800' }}>
+                         Start New Session
                       </button>
                    </div>
                 </div>
@@ -545,6 +672,7 @@ function App() {
 
             </div>
           </div>
+        </div>
         </main>
       </div>
     );
@@ -656,15 +784,20 @@ function App() {
               <p style={{ fontSize: '1.2rem', color: '#64748b' }}>Start your multi-agent session by creating a professional account.</p>
            </div>
            <div className="form-wrapper" style={{ background: 'white', padding: '3rem', borderRadius: '32px', boxShadow: '0 20px 50px rgba(0,0,0,0.05)' }}>
+              {loginError && (
+                <div style={{ background: '#fee2e2', color: '#ef4444', padding: '1rem', borderRadius: '12px', marginBottom: '2rem', fontSize: '14px', fontWeight: 'bold', border: '1px solid #fecaca' }}>
+                  {loginError}
+                </div>
+              )}
               <div className="form-group" style={{ marginBottom: '2rem' }}>
                 <label style={{ fontWeight: '800', fontSize: '14px', color: '#64748b', marginBottom: '10px', display: 'block' }}>Corporate Email</label>
-                <input className="form-control" type="email" placeholder="admin@enterprise.ai" style={{ height: '60px', borderRadius: '15px' }} />
+                <input className="form-control" type="email" placeholder="admin@enterprise.ai" style={{ height: '60px', borderRadius: '15px' }} value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
               </div>
               <div className="form-group" style={{ marginBottom: '3rem' }}>
                 <label style={{ fontWeight: '800', fontSize: '14px', color: '#64748b', marginBottom: '10px', display: 'block' }}>Secure Password</label>
-                <input className="form-control" type="password" placeholder="••••••••" style={{ height: '60px', borderRadius: '15px' }} />
+                <input className="form-control" type="password" placeholder="••••••••" style={{ height: '60px', borderRadius: '15px' }} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
               </div>
-              <button className="btn btn-primary" style={{ width: '100%', height: '70px', borderRadius: '20px', fontSize: '1.2rem', fontWeight: '900' }} onClick={() => setShowDashboard(true)}>
+              <button className="btn btn-primary" style={{ width: '100%', height: '70px', borderRadius: '20px', fontSize: '1.2rem', fontWeight: '900' }} onClick={handleLogin}>
                 Initialize Portal Access
               </button>
            </div>
