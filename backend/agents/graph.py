@@ -37,6 +37,7 @@ class AgentState(TypedDict):
     context: List[Dict[str, Any]]  # List of {text, metadata}
     draft_response: str
     final_response: str
+    citations_text: str
     is_grounded: bool
     confidence: float
     iterations: int  # To prevent infinite loops
@@ -261,9 +262,13 @@ def citation_agent(state: AgentState):
         pnum = c["metadata"].get("page_number", "?")
         sources.add(f"{fname} (p. {pnum})")
     
-    citation_footer = "\n\n**Sources:**\n- " + "\n- ".join(sorted(list(sources)))
+    citation_text = "**Sources:**\n- " + "\n- ".join(sorted(list(sources)))
     
-    return {"final_response": response + citation_footer, "entities": state.get("entities", [])}
+    return {
+        "final_response": response, 
+        "citations_text": citation_text,
+        "entities": state.get("entities", [])
+    }
 
 
 def entity_extractor_worker(state: AgentState):

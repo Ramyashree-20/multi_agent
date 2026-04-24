@@ -30,6 +30,7 @@ const API_BASE_URL = 'http://localhost:8000/api';
 interface Source { file: string; page: number | string; }
 interface ChatMessage {
   id: string; role: 'user' | 'agent'; content: string;
+  citations_text?: string;
   agent_used?: string; sources?: Source[]; confidence?: number; entities?: any[]; timestamp: Date;
 }
 interface UploadedFile { name: string; size: string; status: 'processing' | 'ready' | 'error'; type?: string; }
@@ -76,6 +77,7 @@ function App() {
       const resp = await axios.post(url);
       const msg: ChatMessage = {
         id: Date.now().toString(), role: 'agent', content: resp.data.answer,
+        citations_text: resp.data.citations_text,
         sources: resp.data.sources, confidence: resp.data.confidence, 
         entities: resp.data.entities,
         agent_used: resp.data.agent_used || 'General Agent', timestamp: new Date()
@@ -271,9 +273,23 @@ function App() {
                             borderTopRightRadius: m.role === 'user' ? '4px' : '24px',
                             maxWidth: '85%'
                           }}>
-                              <p style={{ fontSize: '17px', fontWeight: '500', lineHeight: '1.6' }}>
+                              <p style={{ fontSize: '17px', fontWeight: '500', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                                 {m.content || "Thinking... (The specialist agent is analyzing the source context)"}
                               </p>
+                              {m.citations_text && (
+                                <div style={{ 
+                                  marginTop: '1.5rem', 
+                                  padding: '1rem', 
+                                  background: '#f8fafc', 
+                                  borderRadius: '12px', 
+                                  border: '1px solid #e2e8f0',
+                                  fontSize: '13px',
+                                  color: '#64748b',
+                                  whiteSpace: 'pre-wrap'
+                                }}>
+                                  {m.citations_text}
+                                </div>
+                              )}
                               {m.sources && m.sources.length > 0 && (
                                 <div style={{ marginTop: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.6rem', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '1rem' }}>
                                   {m.sources.map((src, j) => (

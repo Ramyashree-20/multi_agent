@@ -36,6 +36,7 @@ async def query_documents(query: str, file_name: str = None):
 
         return {
             "answer": result.get("final_response"),
+            "citations_text": result.get("citations_text"),
             "agent_used": result.get("next_step", "retriever"),
             "sources": sources,
             "confidence": result.get("confidence", 0.0),

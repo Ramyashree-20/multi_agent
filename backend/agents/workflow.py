@@ -20,6 +20,7 @@ def process_query_workflow(query: str, file_name: str = None) -> dict:
         "context": [],
         "draft_response": "",
         "final_response": "",
+        "citations_text": "",
         "is_grounded": False,
         "confidence": 0.0,
         "iterations": 0,
