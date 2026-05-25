@@ -30,7 +30,7 @@ import {
   Paperclip
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 /* ─── TYPES ─── */
 interface Source { file: string; page: number | string; }
@@ -76,6 +76,12 @@ function App() {
   /* ─── HANDLERS ─── */
   const handleQuery = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    // Prevent querying while any uploaded file is still processing
+    const anyProcessing = files.some(f => f.status === 'processing');
+    if (anyProcessing) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'agent', content: "Please wait — your document is still being processed and indexed. Try again in a moment.", timestamp: new Date() }]);
+      return;
+    }
     if (!query.trim() || isQuerying) return;
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: query, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
@@ -465,7 +471,7 @@ function App() {
                               value={query} 
                               onChange={e => setQuery(e.target.value)} 
                             />
-                            <button className="btn btn-primary" type="submit" disabled={isQuerying} style={{ width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>
+                            <button className="btn btn-primary" type="submit" disabled={isQuerying || files.some(f => f.status === 'processing')} style={{ width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>
                               {isQuerying ? <TrendingUp className="animate-pulse" /> : <Send size={24} />}
                             </button>
                           </div>

@@ -124,9 +124,18 @@ def retrieval_worker(state: AgentState):
     
     # Retrieve top 5 chunks
     raw_results = query_similar(query, n_results=5, where_filter=where_filter)
-    
+
     documents = raw_results.get("documents", [[]])[0]
     metadatas = raw_results.get("metadatas", [[]])[0]
+
+    # If a scoped search (by file_name / page) returned no results, fall back
+    # to a global search. This handles cases where metadata doesn't exactly
+    # match the frontend-provided filename (spacing, encoding, etc.).
+    if not documents and where_filter is not None:
+        print("DEBUG: scoped retrieval returned no results, falling back to global search")
+        raw_results = query_similar(query, n_results=5, where_filter=None)
+        documents = raw_results.get("documents", [[]])[0]
+        metadatas = raw_results.get("metadatas", [[]])[0]
     
     context = []
     for doc, meta in zip(documents, metadatas):
@@ -165,6 +174,12 @@ def summarizer_worker(state: AgentState):
     raw_results = query_similar(query, n_results=10, where_filter=where_filter)
     documents = raw_results.get("documents", [[]])[0]
     metadatas = raw_results.get("metadatas", [[]])[0]
+
+    if not documents and where_filter is not None:
+        print("DEBUG: summarizer scoped retrieval empty, retrying global search")
+        raw_results = query_similar(query, n_results=10, where_filter=None)
+        documents = raw_results.get("documents", [[]])[0]
+        metadatas = raw_results.get("metadatas", [[]])[0]
     
     context = [{"text": d, "metadata": m} for d, m in zip(documents, metadatas)]
     
